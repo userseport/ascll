@@ -1,0 +1,573 @@
+<title>Печатник</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Chivo+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: слева панель настроек, справа лист перфорированной бумаги с результатом; на телефоне блоки встают друг под другом */
+:root{
+  --paper:#f2f4e6; --band:#dfe8d0; --ink:#1c2a22; --muted:#5d6b60;
+  --panel:#e9ecdc; --line:#bcc6ae; --accent:#2336a6; --accent-fg:#fff; --hole:#c7cfb6;
+  --display:"Bricolage Grotesque","Arial Narrow",Arial,sans-serif;
+  --mono:"Chivo Mono",ui-monospace,"Cascadia Mono",Consolas,"DejaVu Sans Mono",monospace;
+  --fs:13;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#1d231e; --band:#252d26; --ink:#dfe8d6; --muted:#97a595;
+  --panel:#161b17; --line:#344036; --accent:#8fa2ff; --accent-fg:#10142e; --hole:#0f130f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#1d231e; --band:#252d26; --ink:#dfe8d6; --muted:#97a595;
+  --panel:#161b17; --line:#344036; --accent:#8fa2ff; --accent-fg:#10142e; --hole:#0f130f; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--panel);color:var(--ink);font:15px/1.45 var(--mono);
+  padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;justify-content:space-between}
+h1{font:800 clamp(30px,6vw,52px)/1 var(--display);letter-spacing:-.02em;margin:0}
+header p{margin:0;color:var(--muted);font-size:13px;max-width:44ch}
+nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+nav button{flex:none;font:500 14px var(--mono);color:var(--ink);background:transparent;border:1.5px solid var(--line);
+  padding:9px 14px;cursor:pointer;border-radius:2px}
+nav button[aria-selected="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.layout{display:grid;grid-template-columns:minmax(250px,330px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:820px){.layout{grid-template-columns:minmax(0,1fr)}}
+#controls{display:grid;gap:16px;min-width:0}
+.field{display:grid;gap:6px;min-width:0}
+.field>label,.field>span.l{font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+textarea,input[type=text],input[type=number],select{width:100%;font:15px var(--mono);color:var(--ink);background:var(--paper);
+  border:1.5px solid var(--line);padding:9px 10px;border-radius:2px;min-width:0}
+textarea{resize:vertical;min-height:84px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.row{display:flex;gap:10px;align-items:center}
+.row output{font-variant-numeric:tabular-nums;min-width:3ch;text-align:right;font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{font:14px var(--mono);color:var(--ink);background:var(--paper);border:1.5px solid var(--line);padding:6px 10px;cursor:pointer;border-radius:2px;min-height:36px}
+.chips button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-fg)}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.drop{border:1.5px dashed var(--muted);padding:18px 12px;text-align:center;cursor:pointer;background:var(--paper);border-radius:2px;font-size:14px}
+.drop input{display:none}
+.drop:focus-within,.drop.over{border-color:var(--accent);background:var(--band)}
+.sheet{min-width:0;display:grid;gap:10px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.bar .sp{flex:1}
+.btn{font:700 14px var(--mono);border:1.5px solid var(--ink);background:transparent;color:var(--ink);padding:10px 16px;cursor:pointer;border-radius:2px;min-height:42px}
+.btn.main{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn:active{transform:translateY(1px)}
+.zoom{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.zoom input{width:110px}
+.paper{position:relative;background:var(--paper);border:1.5px solid var(--line);padding-inline:34px;padding-block:12px;min-width:0;
+  background-image:radial-gradient(circle,var(--hole) 0 4px,transparent 4.5px),radial-gradient(circle,var(--hole) 0 4px,transparent 4.5px);
+  background-size:20px 28px,20px 28px;background-position:7px 10px,calc(100% - 7px) 10px;background-repeat:repeat-y,repeat-y}
+.paper::before,.paper::after{content:"";position:absolute;top:0;bottom:0;width:1px;background:var(--line);left:26px}
+.paper::after{left:auto;right:26px}
+#out{margin:0;font:400 calc(var(--fs)*1px)/1.25 var(--mono);white-space:pre;overflow:auto;min-height:320px;max-height:68vh;padding:0 6px;tab-size:4;
+  background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--fs)*3.75px),var(--band) calc(var(--fs)*3.75px),var(--band) calc(var(--fs)*7.5px));
+  background-attachment:local;color:var(--ink);outline:none}
+.status{font-size:12.5px;color:var(--muted);min-height:1.4em}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.gal button{font:13px var(--mono);padding:10px 6px;background:var(--paper);border:1.5px solid var(--line);color:var(--ink);cursor:pointer;border-radius:2px;min-height:44px}
+.gal button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<div class="wrap">
+  <header>
+    <h1>Печатник</h1>
+    <p>Шесть мастерских ASCII-арта. Результат выводится на бумагу, его можно скопировать или сохранить в .txt.</p>
+  </header>
+  <nav id="tabs" role="tablist" aria-label="Виды арта"></nav>
+  <div class="layout">
+    <div id="controls" role="tabpanel"></div>
+    <section class="sheet">
+      <div class="bar">
+        <button class="btn main" id="copy" type="button">Копировать</button>
+        <button class="btn" id="save" type="button">Сохранить .txt</button>
+        <span class="sp"></span>
+        <label class="zoom" for="zoom">Размер <input id="zoom" type="range" min="6" max="26" value="13"></label>
+      </div>
+      <div class="paper"><pre id="out" tabindex="0" aria-live="polite"></pre></div>
+      <div class="status" id="status" role="status"></div>
+    </section>
+  </div>
+</div>
+<script>
+/* ===== Пиксельный шрифт 5x7 ===== */
+const G = {};
+(function(){
+  const d = {
+  A:".###./#...#/#...#/#####/#...#/#...#/#...#",B:"####./#...#/#...#/####./#...#/#...#/####.",
+  C:".###./#...#/#..../#..../#..../#...#/.###.",D:"####./#...#/#...#/#...#/#...#/#...#/####.",
+  E:"#####/#..../#..../####./#..../#..../#####",F:"#####/#..../#..../####./#..../#..../#....",
+  G:".###./#...#/#..../#.###/#...#/#...#/.###.",H:"#...#/#...#/#...#/#####/#...#/#...#/#...#",
+  I:".###./..#../..#../..#../..#../..#../.###.",J:"..###/...#./...#./...#./...#./#..#./.##..",
+  K:"#...#/#..#./#.#../##.../#.#../#..#./#...#",L:"#..../#..../#..../#..../#..../#..../#####",
+  M:"#...#/##.##/#.#.#/#.#.#/#...#/#...#/#...#",N:"#...#/##..#/#.#.#/#..##/#...#/#...#/#...#",
+  O:".###./#...#/#...#/#...#/#...#/#...#/.###.",P:"####./#...#/#...#/####./#..../#..../#....",
+  Q:".###./#...#/#...#/#...#/#.#.#/#..#./.##.#",R:"####./#...#/#...#/####./#.#../#..#./#...#",
+  S:".####/#..../#..../.###./....#/....#/####.",T:"#####/..#../..#../..#../..#../..#../..#..",
+  U:"#...#/#...#/#...#/#...#/#...#/#...#/.###.",V:"#...#/#...#/#...#/#...#/#...#/.#.#./..#..",
+  W:"#...#/#...#/#...#/#.#.#/#.#.#/##.##/#...#",X:"#...#/#...#/.#.#./..#../.#.#./#...#/#...#",
+  Y:"#...#/#...#/.#.#./..#../..#../..#../..#..",Z:"#####/....#/...#./..#../.#.../#..../#####",
+  0:".###./#...#/#..##/#.#.#/##..#/#...#/.###.",1:"..#../.##../..#../..#../..#../..#../.###.",
+  2:".###./#...#/....#/...#./..#../.#.../#####",3:"####./....#/....#/.###./....#/....#/####.",
+  4:"#...#/#...#/#...#/#####/....#/....#/....#",5:"#####/#..../####./....#/....#/#...#/.###.",
+  6:".###./#..../#..../####./#...#/#...#/.###.",7:"#####/....#/...#./..#../.#.../.#.../.#...",
+  8:".###./#...#/#...#/.###./#...#/#...#/.###.",9:".###./#...#/#...#/.####/....#/....#/.###.",
+  "Б":"#####/#..../#..../####./#...#/#...#/####.","Г":"#####/#..../#..../#..../#..../#..../#....",
+  "Д":"..##./.#.#./#..#./#..#./#..#./#####/#...#","Ж":"#.#.#/#.#.#/.###./..#../.###./#.#.#/#.#.#",
+  "З":".###./#...#/....#/..##./....#/#...#/.###.","И":"#...#/#...#/#..##/#.#.#/##..#/#...#/#...#",
+  "Й":".#.#./..#../#...#/#..##/#.#.#/##..#/#...#","Л":"..###/.#..#/.#..#/.#..#/.#..#/.#..#/##..#",
+  "П":"#####/#...#/#...#/#...#/#...#/#...#/#...#","У":"#...#/#...#/#...#/.####/....#/#...#/.###.",
+  "Ф":"..#../.###./#.#.#/#.#.#/.###./..#../..#..","Ц":"#..#./#..#./#..#./#..#./#..#./#####/....#",
+  "Ч":"#...#/#...#/#...#/.####/....#/....#/....#","Ш":"#.#.#/#.#.#/#.#.#/#.#.#/#.#.#/#.#.#/#####",
+  "Щ":"#.#.#/#.#.#/#.#.#/#.#.#/#.#.#/#####/....#","Ъ":"##.../.#.../.#.../.###./.#..#/.#..#/.###.",
+  "Ы":"#...#/#...#/#...#/##..#/#.#.#/#.#.#/##..#","Ь":"#..../#..../#..../####./#...#/#...#/####.",
+  "Э":".###./#...#/....#/..###/....#/#...#/.###.","Ю":"#..#./#.#.#/#.#.#/###.#/#.#.#/#.#.#/#..#.",
+  "Я":".####/#...#/#...#/.####/..#.#/.#..#/#...#","Ё":".#.#./#####/#..../####./#..../#..../#####",
+  "!":"..#../..#../..#../..#../..#../...../..#..","?":".###./#...#/....#/...#./..#../...../..#..",
+  "-":"...../...../...../#####/...../...../.....",".":"...../...../...../...../...../.##../.##..",
+  ",":"...../...../...../...../..##./..#../.#...",":":"...../.##../.##../...../.##../.##../.....",
+  "+":"...../..#../..#../#####/..#../..#../.....","*":"...../#.#.#/.###./#####/.###./#.#.#/.....",
+  "♥":".#.#./#####/#####/#####/.###./..#../.....","'":"..#../..#../.#.../...../...../...../.....",
+  "(":"...#./..#../.#.../.#.../.#.../..#../...#.",")":".#.../..#../...#./...#./...#./..#../.#...",
+  "/":"....#/....#/...#./..#../.#.../#..../#....","=":"...../...../#####/...../#####/...../.....",
+  " ":"..../..../..../..../..../..../...."
+  };
+  const alias = {"А":"A","В":"B","Е":"E","К":"K","М":"M","Н":"H","О":"O","Р":"P","С":"C","Т":"T","Х":"X"};
+  for (const k in d) G[k] = d[k].split("/");
+  for (const k in alias) G[k] = G[alias[k]];
+})();
+
+function glyphFor(ch){
+  const u = ch.toUpperCase();
+  return G[u] || G["?"];
+}
+
+/* text, fill — символ закраски, bg — фон, scale 1..3, gap — пробел между буквами, shadow — символ тени или "" */
+function makeBanner(text, o){
+  const sx = o.scale * 2, sy = o.scale, rows = 7 * sy;
+  const lines = String(text).split("\n");
+  const out = [];
+  for (const line of lines) {
+    const chars = [...line];
+    if (!chars.length) { out.push(...Array(rows).fill("")); continue; }
+    /* собираем построчно: проще и надёжнее */
+    const total = chars.map(ch => glyphFor(ch)[0].length * sx + o.gap).reduce((a,b)=>a+b,0) + (o.shadow ? sx : 0);
+    const H = rows + (o.shadow ? sy : 0);
+    const cv = Array.from({length: H}, () => Array(total).fill(o.bg));
+    let ox = 0;
+    for (const ch of chars) {
+      const g = glyphFor(ch), w = g[0].length;
+      for (let r = 0; r < 7; r++) for (let c = 0; c < w; c++) {
+        if (g[r][c] !== "#") continue;
+        for (let dy = 0; dy < sy; dy++) for (let dx = 0; dx < sx; dx++) {
+          const y = r * sy + dy, x = ox + c * sx + dx;
+          if (o.shadow) { const ys = y + sy, xs = x + sx; if (cv[ys][xs] === o.bg) cv[ys][xs] = o.shadow; }
+        }
+      }
+      for (let r = 0; r < 7; r++) for (let c = 0; c < w; c++) {
+        if (g[r][c] !== "#") continue;
+        for (let dy = 0; dy < sy; dy++) for (let dx = 0; dx < sx; dx++) cv[r * sy + dy][ox + c * sx + dx] = o.fill;
+      }
+      ox += w * sx + o.gap;
+    }
+    for (const row of cv) out.push(row.join("").replace(/\s+$/,""));
+    out.push("");
+  }
+  while (out.length && out[out.length-1] === "") out.pop();
+  return out.join("\n");
+}
+/* ===== Рамки ===== */
+const BOX = {
+  "Одинарная": ["┌","─","┐","│","└","┘"],
+  "Двойная":   ["╔","═","╗","║","╚","╝"],
+  "Скруглённая":["╭","─","╮","│","╰","╯"],
+  "Жирная":    ["┏","━","┓","┃","┗","┛"],
+  "Плюсы":     ["+","-","+","|","+","+"],
+  "Звёзды":    ["*","*","*","*","*","*"],
+  "Решётка":   ["#","#","#","#","#","#"],
+  "Точки":     ["·","·","·","·","·","·"]
+};
+const len = s => [...s].length;
+const padTo = (s, w, al) => {
+  const n = w - len(s);
+  if (al === "center") return " ".repeat(Math.floor(n/2)) + s + " ".repeat(Math.ceil(n/2));
+  if (al === "right") return " ".repeat(n) + s;
+  return s + " ".repeat(n);
+};
+function makeFrame(text, o){
+  const b = BOX[o.style] || BOX["Одинарная"];
+  const lines = String(text).split("\n");
+  const inner = Math.max(1, ...lines.map(len));
+  const w = inner + o.pad * 2;
+  const out = [];
+  out.push(b[0] + b[1].repeat(w) + b[2]);
+  for (let i = 0; i < o.vpad; i++) out.push(b[3] + " ".repeat(w) + b[3]);
+  for (const l of lines) out.push(b[3] + " ".repeat(o.pad) + padTo(l, inner, o.align) + " ".repeat(o.pad) + b[3]);
+  for (let i = 0; i < o.vpad; i++) out.push(b[3] + " ".repeat(w) + b[3]);
+  out.push(b[4] + b[1].repeat(w) + b[5]);
+  if (o.shadow) {
+    return out.map((l, i) => l + (i === 0 ? "" : "▒")).concat([" " + "▒".repeat(w + 2)]).join("\n");
+  }
+  return out.join("\n");
+}
+
+/* ===== Таблица ===== */
+const TBL = {
+  "Одинарная":   {h:"─", v:"│", tl:"┌", tm:"┬", tr:"┐", ml:"├", mm:"┼", mr:"┤", bl:"└", bm:"┴", br:"┘"},
+  "Двойная":     {h:"═", v:"║", tl:"╔", tm:"╦", tr:"╗", ml:"╠", mm:"╬", mr:"╣", bl:"╚", bm:"╩", br:"╝"},
+  "Скруглённая": {h:"─", v:"│", tl:"╭", tm:"┬", tr:"╮", ml:"├", mm:"┼", mr:"┤", bl:"╰", bm:"┴", br:"╯"},
+  "ASCII":       {h:"-", v:"|", tl:"+", tm:"+", tr:"+", ml:"+", mm:"+", mr:"+", bl:"+", bm:"+", br:"+"}
+};
+function makeTable(text, o){
+  const t = TBL[o.style] || TBL["Одинарная"];
+  const sep = o.sep === "tab" ? "\t" : o.sep;
+  const rows = String(text).split("\n").filter(l => l.trim() !== "")
+    .map(l => l.split(sep).map(c => c.trim()));
+  if (!rows.length) return "";
+  const n = Math.max(...rows.map(r => r.length));
+  rows.forEach(r => { while (r.length < n) r.push(""); });
+  const w = Array.from({length: n}, (_, i) => Math.max(...rows.map(r => len(r[i]))));
+  const line = (l, m, r) => l + w.map(x => t.h.repeat(x + 2)).join(m) + r;
+  const row = r => t.v + r.map((c, i) => " " + padTo(c, w[i], o.align) + " ").join(t.v) + t.v;
+  const out = [line(t.tl, t.tm, t.tr)];
+  rows.forEach((r, i) => {
+    out.push(row(r));
+    if (i < rows.length - 1 && (o.rules || (o.header && i === 0))) out.push(line(t.ml, t.mm, t.mr));
+  });
+  out.push(line(t.bl, t.bm, t.br));
+  return out.join("\n");
+}
+
+/* ===== Узоры ===== */
+function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const PATTERNS = ["Волны","Ромбы","Шахматка","Ёлочка","Звёздное небо"];
+function makePattern(kind, o){
+  const W = o.w, H = o.h, k = o.size, out = [];
+  if (kind === "Волны") {
+    const base = o.fill === "~" ? ".-~'~-." : "._.-'¯'-._.";
+    const p = base.repeat(Math.ceil(W / base.length) + 2);
+    for (let r = 0; r < H; r++) { const off = (r * 2) % base.length; out.push(p.slice(off, off + W)); }
+  } else if (kind === "Ромбы") {
+    const P = k * 2;
+    for (let r = 0; r < H; r++) { let s = "";
+      for (let c = 0; c < W; c++) {
+        const x = c % P, y = (r * 2) % P, d = Math.abs(x - k) + Math.abs(y - k);
+        s += d === k ? o.fill : (d < k ? " " : "·");
+      } out.push(s); }
+  } else if (kind === "Шахматка") {
+    for (let r = 0; r < H; r++) { let s = "";
+      for (let c = 0; c < W; c++) s += (Math.floor(c / (k * 2)) + Math.floor(r / k)) % 2 ? " " : o.fill;
+      out.push(s); }
+  } else if (kind === "Ёлочка") {
+    for (let r = 0; r < H; r++) { let s = "";
+      for (let c = 0; c < W; c++) { const ph = (c + (Math.floor(r / k) % 2) * k) % (k * 2); s += ph < k ? "/" : "\\"; }
+      out.push(s); }
+  } else {
+    const R = rng(o.seed), set = ["·", ".", "*", "+", "✦"];
+    for (let r = 0; r < H; r++) { let s = "";
+      for (let c = 0; c < W; c++) { const v = R(); s += v < o.density ? set[Math.floor(R() * set.length)] : " "; }
+      out.push(s.replace(/\s+$/, "")); }
+  }
+  return out.join("\n");
+}
+
+/* ===== Фото ===== */
+const RAMPS = {
+  "Классика": " .:-=+*#%@",
+  "Блоки": " ░▒▓█",
+  "Буквы": " .,:;ilwW8@",
+  "Два тона": " #"
+};
+function imageToAscii(img, o){
+  const cols = o.cols;
+  const rows = Math.max(1, Math.round(img.height / img.width * cols * 0.5));
+  const cv = document.createElement("canvas"); cv.width = cols; cv.height = rows;
+  const cx = cv.getContext("2d", {willReadFrequently: true});
+  cx.fillStyle = "#fff"; cx.fillRect(0, 0, cols, rows);
+  cx.drawImage(img, 0, 0, cols, rows);
+  return pixelsToAscii(cx.getImageData(0, 0, cols, rows).data, cols, rows, o);
+}
+function pixelsToAscii(data, cols, rows, o){
+  const ramp = [...(RAMPS[o.ramp] || RAMPS["Классика"])];
+  const f = (259 * (o.contrast + 255)) / (255 * (259 - o.contrast));
+  const out = [];
+  for (let y = 0; y < rows; y++) { let s = "";
+    for (let x = 0; x < cols; x++) {
+      const i = (y * cols + x) * 4;
+      let l = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+      l = f * (l - 128) + 128 + o.bright;
+      l = Math.max(0, Math.min(255, l)) / 255;
+      let d = 1 - l; if (o.invert) d = 1 - d;
+      s += ramp[Math.min(ramp.length - 1, Math.floor(d * ramp.length))];
+    }
+    out.push(s.replace(/\s+$/, "")); }
+  return out.join("\n");
+}
+
+/* ===== Галерея ===== */
+const GAL = {
+"Кот": String.raw`  /\_/\
+ ( o.o )
+  > ^ <
+ /|   |\
+(_|___|_)`,
+"Сердце": String.raw`  ***   ***
+ ***** *****
+*************
+ ***********
+  *********
+   *******
+    *****
+     ***
+      *`,
+"Ёлка": String.raw`      *
+     /*\
+    /***\
+   /*****\
+  /*******\
+ /*********\
+/***********\
+     |||
+     |||`,
+"Домик": String.raw`      ____
+     /    \      []
+    /      \
+   /________\
+   |  __  |
+   | |  | |
+   |_|__|_|`,
+"Чашка": String.raw`   ( (
+    ) )
+  ........
+  |      |]
+  \      /
+   '----'`,
+"Рыбка": String.raw`   o
+    O    ><(((o>
+  o
+      ~  ~  ~`,
+"Сова": String.raw`  ,___,
+  (O,O)
+  (   )
+  -"-"-`,
+"Цветок": String.raw`    _
+  _(_)_
+ (_)@(_)
+   (_)\
+     |/
+    \|
+~~~~~~~~~~`,
+"Робот": String.raw`    _[_]_
+   (o _ o)
+  /|_____|\
+   |_|_|_|
+    d   b`,
+"Звезда": String.raw`     /\
+    /  \
+___/    \___
+\          /
+ \  *  *  /
+ /   __   \
+/___/  \___\ `
+};
+
+for (const k in GAL) GAL[k] = GAL[k].split("\n").map(l => l.replace(/\s+$/, "")).join("\n");
+/* ===== Интерфейс ===== */
+const $ = s => document.querySelector(s);
+const out = $("#out"), statusEl = $("#status"), ctl = $("#controls"), tabs = $("#tabs");
+let photoImg = null, current = "banner", statusTimer = 0;
+
+function sampleImage(){
+  const c = document.createElement("canvas"); c.width = 240; c.height = 160;
+  const x = c.getContext("2d");
+  const sky = x.createLinearGradient(0, 0, 0, 160); sky.addColorStop(0, "#e8e8e8"); sky.addColorStop(1, "#7a7a7a");
+  x.fillStyle = sky; x.fillRect(0, 0, 240, 160);
+  const sun = x.createRadialGradient(150, 60, 4, 150, 60, 50); sun.addColorStop(0, "#fff"); sun.addColorStop(1, "#bbb");
+  x.fillStyle = sun; x.beginPath(); x.arc(150, 60, 46, 0, 7); x.fill();
+  x.fillStyle = "#222"; x.beginPath(); x.moveTo(0, 160); x.lineTo(0, 110); x.lineTo(60, 70); x.lineTo(110, 115); x.lineTo(160, 90); x.lineTo(240, 130); x.lineTo(240, 160); x.fill();
+  x.fillStyle = "#444"; x.beginPath(); x.moveTo(0, 160); x.lineTo(40, 135); x.lineTo(100, 150); x.lineTo(170, 128); x.lineTo(240, 160); x.fill();
+  return c;
+}
+
+const CH = ["█", "▓", "#", "@", "*", "◆", "O", "+"];
+const MODES = {
+  banner: {name: "Баннер", init: {text: "ПЕЧАТЬ", fill: "█", shadow: "", scale: 1, gap: 2},
+    ui: [
+      {t: "text", k: "text", l: "Текст", ph: "Любые буквы, цифры, кириллица"},
+      {t: "chips", k: "fill", l: "Символ", o: CH.map(v => [v, v])},
+      {t: "chips", k: "shadow", l: "Тень", o: [["нет", ""], ["░", "░"], ["▒", "▒"], [".", "."], ["/", "/"]]},
+      {t: "range", k: "scale", l: "Крупность", min: 1, max: 3},
+      {t: "range", k: "gap", l: "Между буквами", min: 0, max: 6}],
+    run: s => makeBanner(s.text || " ", {scale: s.scale, gap: s.gap, fill: s.fill, bg: " ", shadow: s.shadow})},
+  photo: {name: "Фото", init: {cols: 80, ramp: "Классика", contrast: 20, bright: 0, invert: false},
+    ui: [
+      {t: "file", k: "file", l: "Картинка"},
+      {t: "range", k: "cols", l: "Ширина, символов", min: 20, max: 200},
+      {t: "chips", k: "ramp", l: "Набор символов", o: Object.keys(RAMPS).map(v => [v, v])},
+      {t: "range", k: "contrast", l: "Контраст", min: -100, max: 100},
+      {t: "range", k: "bright", l: "Яркость", min: -100, max: 100},
+      {t: "check", k: "invert", l: "Инвертировать (для тёмного фона)"}],
+    run: s => imageToAscii(photoImg || (photoImg = sampleImage()), s)},
+  frame: {name: "Рамка", init: {text: "Привет!\nЭто текст в рамке", style: "Двойная", pad: 2, vpad: 1, align: "center", shadow: false},
+    ui: [
+      {t: "area", k: "text", l: "Текст"},
+      {t: "chips", k: "style", l: "Стиль рамки", o: Object.keys(BOX).map(v => [v, v])},
+      {t: "chips", k: "align", l: "Выравнивание", o: [["слева", "left"], ["по центру", "center"], ["справа", "right"]]},
+      {t: "range", k: "pad", l: "Отступ по бокам", min: 0, max: 8},
+      {t: "range", k: "vpad", l: "Отступ сверху и снизу", min: 0, max: 4},
+      {t: "check", k: "shadow", l: "Тень"}],
+    run: s => makeFrame(s.text, s)},
+  pattern: {name: "Узоры", init: {kind: "Ромбы", w: 60, h: 14, size: 4, fill: "#", seed: 7, density: 0.12},
+    ui: [
+      {t: "chips", k: "kind", l: "Узор", o: PATTERNS.map(v => [v, v])},
+      {t: "range", k: "w", l: "Ширина", min: 10, max: 140},
+      {t: "range", k: "h", l: "Высота", min: 3, max: 60},
+      {t: "range", k: "size", l: "Размер ячейки", min: 2, max: 10},
+      {t: "chips", k: "fill", l: "Символ", o: ["#", "*", "◆", "+", "░", "~", "o"].map(v => [v, v])},
+      {t: "range", k: "density", l: "Густота звёзд", min: 2, max: 40, f: v => v / 100},
+      {t: "btn", l: "Новое небо", go: s => { s.seed = Math.floor(Math.random() * 1e6); }}],
+    run: s => makePattern(s.kind, s)},
+  table: {name: "Таблица", init: {text: "Товар | Цена | Шт.\nХлеб | 45 | 2\nМолоко | 89 | 1\nСыр | 420 | 1", sep: "|", style: "Одинарная", align: "left", header: true, rules: false},
+    ui: [
+      {t: "area", k: "text", l: "Строки таблицы", rows: 6},
+      {t: "chips", k: "sep", l: "Разделитель колонок", o: [["|", "|"], [";", ";"], [",", ","], ["Tab", "tab"]]},
+      {t: "chips", k: "style", l: "Линии", o: Object.keys(TBL).map(v => [v, v])},
+      {t: "chips", k: "align", l: "Выравнивание", o: [["слева", "left"], ["по центру", "center"], ["справа", "right"]]},
+      {t: "check", k: "header", l: "Выделить первую строку"},
+      {t: "check", k: "rules", l: "Линия между всеми строками"}],
+    run: s => makeTable(s.text, s)},
+  gallery: {name: "Галерея", init: {pick: "Кот"},
+    ui: [{t: "gal", k: "pick", l: "Готовые рисунки"}],
+    run: s => GAL[s.pick] || ""}
+};
+const S = {}; for (const k in MODES) S[k] = {...MODES[k].init};
+
+function el(tag, props = {}, kids = []){
+  const e = document.createElement(tag);
+  for (const k in props) { if (/^aria[A-Z]/.test(k)) e.setAttribute("aria-" + k.slice(4).toLowerCase(), props[k]); else e[k] = props[k]; }
+  kids.forEach(c => e.append(c)); return e;
+}
+function field(label, node, forId){
+  const f = el("div", {className: "field"});
+  f.append(el(forId ? "label" : "span", forId ? {htmlFor: forId, textContent: label} : {className: "l", textContent: label}));
+  f.append(node); return f;
+}
+function buildControls(){
+  const s = S[current]; ctl.replaceChildren();
+  for (const d of MODES[current].ui) {
+    const id = `c-${current}-${d.k || "x"}`;
+    if (d.t === "text" || d.t === "area") {
+      const i = el(d.t === "text" ? "input" : "textarea", {id, value: s[d.k], placeholder: d.ph || ""});
+      if (d.t === "text") i.type = "text"; else i.rows = d.rows || 4;
+      i.spellcheck = false;
+      i.addEventListener("input", () => { s[d.k] = i.value; render(); });
+      ctl.append(field(d.l, i, id));
+    } else if (d.t === "range") {
+      const f = d.f || (v => v), g = v => d.f ? Math.round(v * 100) : v;
+      const i = el("input", {id, type: "range", min: d.min, max: d.max, value: g(s[d.k])});
+      const o = el("output", {textContent: i.value});
+      i.addEventListener("input", () => { o.textContent = i.value; s[d.k] = f(+i.value); render(); });
+      ctl.append(field(d.l, el("div", {className: "row"}, [i, o]), id));
+    } else if (d.t === "check") {
+      const i = el("input", {id, type: "checkbox", checked: !!s[d.k]});
+      i.addEventListener("change", () => { s[d.k] = i.checked; render(); });
+      ctl.append(el("label", {className: "check", htmlFor: id}, [i, d.l]));
+    } else if (d.t === "chips") {
+      const wrap = el("div", {className: "chips", role: "group", ariaLabel: d.l});
+      d.o.forEach(([lab, val]) => {
+        const b = el("button", {type: "button", textContent: lab, ariaPressed: String(s[d.k] === val)});
+        b.addEventListener("click", () => { s[d.k] = val; wrap.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render(); });
+        wrap.append(b);
+      });
+      ctl.append(field(d.l, wrap));
+    } else if (d.t === "gal") {
+      const wrap = el("div", {className: "gal"});
+      Object.keys(GAL).forEach(name => {
+        const b = el("button", {type: "button", textContent: name, ariaPressed: String(s.pick === name)});
+        b.addEventListener("click", () => { s.pick = name; wrap.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render(); });
+        wrap.append(b);
+      });
+      ctl.append(field(d.l, wrap));
+      ctl.append(el("p", {className: "hint", textContent: "Скопируйте рисунок или сохраните в .txt. Показывайте его в моноширинном шрифте."}));
+    } else if (d.t === "btn") {
+      const b = el("button", {type: "button", className: "btn", textContent: d.l});
+      b.addEventListener("click", () => { d.go(s); render(); });
+      ctl.append(b);
+    } else if (d.t === "file") {
+      const i = el("input", {id, type: "file", accept: "image/*"});
+      const box = el("label", {className: "drop", htmlFor: id}, ["Выберите картинку или перетащите её сюда", i]);
+      const take = file => {
+        if (!file || !file.type.startsWith("image/")) return say("Нужен файл-картинка.");
+        const url = URL.createObjectURL(file), im = new Image();
+        im.onload = () => { photoImg = im; URL.revokeObjectURL(url); box.firstChild.textContent = file.name; render(); };
+        im.onerror = () => say("Не удалось открыть этот файл.");
+        im.src = url;
+      };
+      i.addEventListener("change", () => take(i.files[0]));
+      ["dragover", "dragenter"].forEach(ev => box.addEventListener(ev, e => { e.preventDefault(); box.classList.add("over"); }));
+      ["dragleave", "drop"].forEach(ev => box.addEventListener(ev, e => { e.preventDefault(); box.classList.remove("over"); }));
+      box.addEventListener("drop", e => take(e.dataTransfer.files[0]));
+      ctl.append(box, el("p", {className: "hint", textContent: photoImg ? "Своя картинка загружена." : "Пока показан пример. Фото не покидает ваше устройство."}));
+    }
+  }
+}
+function say(msg, keep){
+  statusEl.textContent = msg; clearTimeout(statusTimer);
+  if (!keep) statusTimer = setTimeout(stats, 2600);
+}
+function stats(){
+  const L = out.textContent.split("\n");
+  statusEl.textContent = `${L.length} строк, до ${Math.max(0, ...L.map(l => [...l].length))} символов в ширину`;
+}
+function render(){
+  let t = "";
+  try { t = MODES[current].run(S[current]); } catch (e) { t = ""; say("Не получилось собрать арт. Измените настройки."); return; }
+  out.textContent = t; stats();
+}
+function setMode(m){
+  current = m;
+  tabs.querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.m === m)));
+  buildControls(); render();
+}
+for (const k in MODES) {
+  const b = el("button", {type: "button", textContent: MODES[k].name, role: "tab"});
+  b.dataset.m = k; b.addEventListener("click", () => setMode(k)); tabs.append(b);
+}
+
+/* копирование */
+function selectOut(){
+  const r = document.createRange(); r.selectNodeContents(out);
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+}
+$("#copy").addEventListener("click", async () => {
+  const t = out.textContent;
+  try { await navigator.clipboard.writeText(t); say("Скопировано в буфер обмена."); }
+  catch (e) {
+    selectOut();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (_) {}
+    say(ok ? "Скопировано в буфер обмена." : "Текст выделен. Нажмите Ctrl+C или «Копировать» в меню.", !ok);
+  }
+});
+/* сохранение .txt */
+let downloadsApi = null;
+(async () => { try { downloadsApi = window.claude && await window.claude.use("downloads"); } catch (_) {} })();
+$("#save").addEventListener("click", async () => {
+  const t = out.textContent, name = `ascii-${current}.txt`;
+  if (!t.trim()) return say("Сначала создайте арт.");
+  if (downloadsApi) {
+    try { await downloadsApi.save({filename: name, data: t}); say("Файл сохранён."); }
+    catch (e) { say(e && e.code === "declined" ? "Сохранение отменено." : "Сохранить не удалось. Используйте «Копировать»."); }
+    return;
+  }
+  try {
+    const u = URL.createObjectURL(new Blob([t], {type: "text/plain;charset=utf-8"}));
+    const a = el("a", {href: u, download: name}); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 4000); say("Файл сохранён.");
+  } catch (e) { say("Сохранить не удалось. Используйте «Копировать»."); }
+});
+/* размер шрифта */
+$("#zoom").addEventListener("input", e => document.documentElement.style.setProperty("--fs", e.target.value));
+if (innerWidth < 600) { $("#zoom").value = 8; document.documentElement.style.setProperty("--fs", 8); }
+setMode("banner");
+</script>
